@@ -1,39 +1,55 @@
+#pragma once
 #include "Transceiver.h"
-#include <RF24.h>
 #include <Arduino.h>
+#include <RF24.h>
 #include <math.h>
 #include <ArduinoJson.h>
+#include <CircularBuffer.h>
 
-Transceiver::Transceiver(bool primary, short ce_pin, short csn_pin, byte address[6]) : m_radio(ce_pin, csn_pin),
-                                                                                       m_connected(false),
-                                                                                       m_last_health_check(millis()),
-                                                                                       m_health_check_delay(1000),
-                                                                                       m_radio_listening(false),
-                                                                                       m_received_packet(),
-                                                                                       m_last_packet_id(0),
-                                                                                       m_id_counter(0)
+// PRIMARY TRANSMITTER
+
+TransceiverPrimary::TransceiverPrimary(int ce_pin, int csn_pin) : m_radio(ce_pin, csn_pin),
+                                                                  m_connected(false),
+                                                                  m_last_health_check(millis()),
+                                                                  m_health_check_delay(1000),
+                                                                  m_radio_listening(false),
+                                                                  m_backoff_time(1),
+                                                                  m_last_backoff(0),
+                                                                  m_buffer(new CircularBuffer<Buffered_packet, 10>()),
+                                                                  m_received_packet(),
+                                                                  m_last_packet_id(0),
+                                                                  m_id_counter(0){};
+
+TransceiverPrimary::~TransceiverPrimary()
 {
-    Serial.begin(9600);
-    Serial.println("Starting radio");
-    this->primary_transmitter = primary;
+    this->m_buffer->clear();
+    delete this->m_buffer;
+}
+
+void TransceiverPrimary::setup(byte address[6])
+{
     this->m_radio.begin();
     this->m_radio.openReadingPipe(0, address);
     this->m_radio.openWritingPipe(address);
     this->m_radio.enableDynamicAck();
-    this->m_radio.setPALevel(RF24_PA_MAX);
+    this->m_radio.setPALevel(RF24_PA_MIN); // RF24_PA_MAX
     this->m_radio.setDataRate(RF24_250KBPS);
     this->m_radio.setAutoAck(true);
-    this->m_radio.setRetries(0, 15);
+    this->m_radio.setRetries(5, 15);
     this->m_radio.stopListening();
 
-    if (this->primary_transmitter)
-    {
-        this->connect();
-    }
-    Serial.println("Startup complete");
-};
+    this->connect();
+}
 
-void Transceiver::connect()
+void TransceiverPrimary::monitor_connection_health()
+{
+    if (this->m_last_health_check + this->m_health_check_delay < millis())
+    {
+        this->send_telemetry_error();
+    }
+}
+
+void TransceiverPrimary::connect()
 {
     Data data;
     data.key = 0;
@@ -41,57 +57,14 @@ void Transceiver::connect()
     this->send(data);
 }
 
-void Transceiver::set_connected()
-{
-    if (!this->m_connected)
-    {
-        this->m_connected = true;
-        StaticJsonDocument<200> doc;
-        doc["0"] = 1;
-        serializeJson(doc, Serial);
-    }
-    this->m_last_health_check = millis();
-}
-
-void Transceiver::set_disconnected()
-{
-    if (this->m_connected)
-    {
-        this->m_connected = false;
-        StaticJsonDocument<200> doc;
-        doc["0"] = 0;
-        serializeJson(doc, Serial);
-    }
-}
-
-void Transceiver::start_radio_listening()
-{
-    if (this->m_radio_listening == false)
-    {
-        this->m_radio.startListening();
-        this->m_radio_listening = true;
-    }
-}
-
-void Transceiver::stop_radio_listening()
-{
-    if (this->m_radio_listening == true)
-    {
-        this->m_radio.stopListening();
-        this->m_radio_listening = false;
-    }
-}
-
 // Sends telemetry error warning that the it has recivied no telemetry to send from serial but its still connected (if the message gets through)
-bool Transceiver::send_telemetry_error()
+bool TransceiverPrimary::send_telemetry_error()
 {
-    this->stop_radio_listening();
-    Packet packet;
-    packet.id = this->incrementId();
-    packet.data[0].key = 100;
-    packet.data[0].value = 1;
-    packet.num_data_fields = 1;
-    bool acknowledged = this->m_radio.write(&packet, sizeof(packet), 1);
+    Data data;
+    data.key = 100;
+    data.value = 1;
+
+    bool acknowledged = this->send(data, false);
     if (acknowledged == true)
     {
         this->set_connected();
@@ -103,28 +76,76 @@ bool Transceiver::send_telemetry_error()
     return acknowledged;
 }
 
-void Transceiver::monitor_connection_health()
+void TransceiverPrimary::debug()
 {
-    if (this->m_last_health_check + this->m_health_check_delay < millis())
+    Serial.println();
+    Serial.print("Buffer: ");
+    Serial.println(this->m_buffer->size());
+    // Serial.print("Buffer available: ");
+    // Serial.println(this->m_buffer->available());
+    // Serial.print("Backoff time: ");
+    // Serial.println(this->m_backoff_time);
+    // Serial.print("Free memory: ");
+    // Serial.println(freeMemory());
+    // Serial.print("Last health check: ");
+    // Serial.println(this->m_last_health_check);
+    // Serial.print("Health check delay: ");
+    // Serial.println(this->m_health_check_delay);
+    // Serial.print("Last backoff: ");
+    // Serial.println(this->m_last_backoff);
+    // Serial.print("Last packet id: ");
+    // Serial.println(this->m_last_packet_id);
+    // Serial.print("id counter: ");
+    // Serial.println(this->m_id_counter);
+}
+
+void TransceiverPrimary::set_connected()
+{
+    if (!this->m_connected)
     {
-        if (this->primary_transmitter)
-        {
-            this->send_telemetry_error();
-        }
-        else
-        {
-            this->set_disconnected();
-        }
+        this->m_connected = true;
+        this->write_connection_status_to_serial(true);
+    }
+    this->m_last_health_check = millis();
+    this->reset_backoff();
+}
+
+void TransceiverPrimary::set_disconnected()
+{
+    if (this->m_connected)
+    {
+        this->m_connected = false;
+        this->write_connection_status_to_serial(false);
+    }
+    this->m_last_health_check = millis();
+}
+
+void TransceiverPrimary::start_radio_listening()
+{
+    if (this->m_radio_listening == false)
+    {
+        this->m_radio.startListening();
+        this->m_radio_listening = true;
     }
 }
 
-void Transceiver::tick()
+void TransceiverPrimary::stop_radio_listening()
+{
+    if (this->m_radio_listening == true)
+    {
+        this->m_radio.stopListening();
+        this->m_radio_listening = false;
+    }
+}
+
+void TransceiverPrimary::tick()
 {
     this->receive();
+    this->clear_buffer();
     this->monitor_connection_health();
 }
 
-void Transceiver::receive()
+void TransceiverPrimary::receive()
 {
     this->start_radio_listening();
     if (this->m_radio.available())
@@ -139,53 +160,49 @@ void Transceiver::receive()
     }
 }
 
-void Transceiver::write_data_to_serial()
+void TransceiverPrimary::write_data_to_serial()
 {
     DynamicJsonDocument doc(sizeof(this->m_received_packet.data));
-    for (short i = 0; i < this->m_received_packet.num_data_fields; i++)
+    for (int i = 0; i < this->m_received_packet.num_data_fields; i++)
     {
-        doc[this->m_received_packet.data[i].key] = this->m_received_packet.data[i].value;
+        doc[String(this->m_received_packet.data[i].key)] = this->m_received_packet.data[i].value;
     }
     serializeJson(doc, Serial);
 }
 
-bool Transceiver::send(Data data)
+void TransceiverPrimary::write_connection_status_to_serial(bool connected)
 {
-    this->stop_radio_listening();
-
-    Packet packet;
-    packet.data[0] = data;
-
-    packet.id = this->incrementId();
-    packet.num_data_fields = 1;
-
-    bool acknowledged = this->m_radio.write(&data, sizeof(data), 1);
-
-    if (acknowledged)
-    {
-        this->set_connected();
-    }
-    else
-    {
-        // add to buffer
-    };
-    this->start_radio_listening();
-    return acknowledged;
+    StaticJsonDocument<200> doc;
+    doc["0"] = (connected) ? 1 : 0;
+    serializeJson(doc, Serial);
 }
 
-bool Transceiver::send(Data data[7], int size)
+bool TransceiverPrimary::send(Data data, bool buffer)
+{
+    Data dataArray[7];
+    dataArray[0] = data;
+    return this->send(dataArray, 1, buffer);
+}
+
+bool TransceiverPrimary::send(Data data[7], int size, bool buffer)
 {
     this->stop_radio_listening();
 
     Packet packet;
-    for (short i = 0; i < size; i++)
+    for (int i = 0; i < size; i++)
     {
         packet.data[i] = data[i];
     }
     packet.id = this->incrementId();
     packet.num_data_fields = size;
 
-    bool acknowledged = this->m_radio.write(&data, sizeof(data), 1);
+    if (!this->m_buffer->isEmpty() && buffer)
+    {
+        this->add_to_buffer(packet);
+        return false;
+    }
+
+    bool acknowledged = this->m_radio.write(&packet, sizeof(packet));
 
     if (acknowledged)
     {
@@ -193,18 +210,15 @@ bool Transceiver::send(Data data[7], int size)
     }
     else
     {
-        // add to buffer
+        if (buffer)
+        {
+            this->add_to_buffer(packet);
+        }
     };
     return acknowledged;
 }
 
-bool Transceiver::sendLarge(Data *data, int size)
-{
-    this->stop_radio_listening();
-    return this->send_split_payload(data, size);
-}
-
-bool Transceiver::send_split_payload(Data *data, int size)
+bool TransceiverPrimary::sendLarge(Data *data, int size, bool buffer)
 {
     bool all_packets_sent = true;
     const int max_size = 7;
@@ -213,33 +227,92 @@ bool Transceiver::send_split_payload(Data *data, int size)
     int index = 0;
     for (int i = 0; i < num_packets; i++)
     {
-        Packet packet;
-        packet.id = this->incrementId();
+        Data packet_data[7];
         unsigned char packet_size = 0;
         for (int j = 0; j < max_size && index < size; j++)
         {
-            packet.data[i] = data[index++];
+            packet_data[j] = data[index++];
             packet_size = j;
         }
-        packet.num_data_fields = packet_size;
 
-        if (this->m_radio.write(&packet, sizeof(packet), 1))
+        if (!this->send(packet_data, packet_size, buffer))
         {
-            this->set_connected();
-        }
-        else
-        {
-            // add to buffer
             all_packets_sent = false;
         };
     }
     return all_packets_sent;
 }
 
-short Transceiver::incrementId()
+bool TransceiverPrimary::send_buffered_packet(Packet packet)
+{
+    this->stop_radio_listening();
+    bool acknowledged = this->m_radio.write(&packet, sizeof(packet));
+
+    if (acknowledged)
+    {
+        this->set_connected();
+    }
+    return acknowledged;
+}
+
+void TransceiverPrimary::add_to_buffer(Packet packet)
+{
+    Buffered_packet buffered_packet;
+    buffered_packet.packet = packet;
+    buffered_packet.created_time = millis();
+    this->m_buffer->unshift(buffered_packet);
+    this->m_last_backoff = millis();
+    this->increase_backoff();
+}
+
+void TransceiverPrimary::clear_buffer()
+{
+    if (this->m_buffer->isEmpty())
+    {
+        return;
+    }
+
+    const unsigned int max_packet_lifetime = 1000;
+
+    while (!this->m_buffer->isEmpty() && this->m_buffer->last().created_time + max_packet_lifetime < millis())
+    {
+        this->m_buffer->pop();
+    }
+
+    if (this->m_last_backoff + this->m_backoff_time > millis())
+    {
+        return;
+    }
+
+    while (!this->m_buffer->isEmpty())
+    {
+        if (this->send_buffered_packet(this->m_buffer->last().packet))
+        {
+            this->m_buffer->pop();
+        }
+        else
+        {
+            this->m_last_backoff = millis();
+            this->increase_backoff();
+            return;
+        }
+    }
+}
+
+void TransceiverPrimary::reset_backoff()
+{
+    this->m_backoff_time = 1;
+}
+
+void TransceiverPrimary::increase_backoff()
+{
+    this->m_backoff_time = this->m_backoff_time * (1 + (random(0, 99) / 100.0));
+}
+
+unsigned char TransceiverPrimary::incrementId()
 {
     this->m_id_counter++;
-    if (m_id_counter > 255)
+    if (m_id_counter > 254)
     {
         m_id_counter = 1;
     }
