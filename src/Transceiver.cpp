@@ -75,22 +75,22 @@ void TransceiverPrimary::syncronise_radios()
 
     StaticJsonDocument<200> doc;
     doc["1"] = 1;
-    // serializeJson(doc, Serial);
+    serializeJson(doc, Serial);
 }
 
 void TransceiverPrimary::debug()
 {
-    // Serial.println();
-    // Serial.println("Packets sent: ");
+    Serial.println();
+    Serial.print("Packets sent: ");
     Serial.println(packets_sent);
     packets_sent = 0;
-    // Serial.print("Packets lost: ");
-    // Serial.println(packets_lost);
-    // packets_lost = 0;
-    // Serial.print("Buffer available: ");
-    // Serial.println(this->m_buffer->available());
-    // Serial.print("Connected: ");
-    // Serial.println(this->m_connected);
+    Serial.print("Packets lost: ");
+    Serial.println(packets_lost);
+    packets_lost = 0;
+    Serial.print("Buffer available: ");
+    Serial.println(this->m_buffer->available());
+    Serial.print("Connected: ");
+    Serial.println(this->m_connected);
     // Serial.print("Awaiting acknoledge: ");
     // Serial.println(this->m_awaiting_acknoledge);
     // Serial.print("Backoff time: ");
@@ -133,9 +133,9 @@ void TransceiverPrimary::set_disconnected()
 void TransceiverPrimary::tick()
 {
     this->receive();
-    this->clear_buffer();
     this->monitor_connection_health();
     this->send_data();
+    this->clear_buffer();
 }
 
 void TransceiverPrimary::receive()
@@ -194,6 +194,7 @@ void TransceiverPrimary::load(Data data[7], int size)
     else
     {
         this->add_to_buffer(packet);
+        Serial.println(this->m_buffer->size());
     }
 }
 
@@ -212,8 +213,7 @@ Packet TransceiverPrimary::data_to_packet(Data data[7], unsigned char size)
 void TransceiverPrimary::load_large(Data *data, int size)
 {
     const int max_size = 7;
-    int num_packets = ceil(size / max_size);
-
+    int num_packets = ceil((double)size / (double)max_size);
     int index = 0;
     for (int i = 0; i < num_packets; i++)
     {
@@ -224,8 +224,7 @@ void TransceiverPrimary::load_large(Data *data, int size)
             packet_data[j] = data[index++];
             packet_size = j;
         }
-
-        this->load(packet_data, packet_size);
+        this->load(packet_data, packet_size + 1);
     }
 }
 
@@ -235,6 +234,7 @@ void TransceiverPrimary::send_data()
     {
         return;
     }
+
     this->m_radio.stopListening();
     bool acknoledged = this->m_radio.write(&this->m_send_packet, sizeof(this->m_send_packet));
     this->m_radio.startListening();
