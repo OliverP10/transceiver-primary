@@ -62,6 +62,7 @@ private:
     void reset_backoff();
     void increase_backoff();
     unsigned char increment_id();
+    void syncronise_radios();
 };
 
 // make the back off not cap at 1000 instead should be random around 1000

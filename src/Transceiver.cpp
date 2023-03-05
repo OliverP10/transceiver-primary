@@ -44,11 +44,6 @@ void TransceiverPrimary::setup(byte address[6])
     this->m_radio.setAutoAck(true);
     this->m_radio.setRetries(5, 15);
     this->m_radio.startListening();
-
-    Data data;
-    data.key = 1;
-    data.value = 0;
-    this->load(data);
 }
 
 void TransceiverPrimary::monitor_connection_health()
@@ -56,32 +51,58 @@ void TransceiverPrimary::monitor_connection_health()
     if (this->m_last_health_check + this->m_health_check_delay < millis())
     {
         this->set_disconnected();
+        this->syncronise_radios();
     }
+}
+
+void TransceiverPrimary::syncronise_radios()
+{
+    Data data;
+    data.key = 1;
+    data.value = 1;
+
+    Packet packet;
+    packet.id = this->increment_id();
+    packet.num_data_fields = 1;
+    packet.data[0] = data;
+
+    this->m_radio.stopListening();
+    if (this->m_radio.write(&packet, sizeof(packet)))
+    {
+        this->m_awaiting_acknoledge = false;
+    }
+    this->m_radio.startListening();
+
+    StaticJsonDocument<200> doc;
+    doc["1"] = 1;
+    // serializeJson(doc, Serial);
 }
 
 void TransceiverPrimary::debug()
 {
-    Serial.println();
-    Serial.print("Packets sent: ");
+    // Serial.println();
+    // Serial.println("Packets sent: ");
     Serial.println(packets_sent);
     packets_sent = 0;
-    Serial.print("Packets lost: ");
-    Serial.println(packets_lost);
-    packets_lost = 0;
-    Serial.print("Buffer available: ");
-    Serial.println(this->m_buffer->available());
-    Serial.print("Awaiting acknoledge: ");
-    Serial.println(this->m_awaiting_acknoledge);
+    // Serial.print("Packets lost: ");
+    // Serial.println(packets_lost);
+    // packets_lost = 0;
+    // Serial.print("Buffer available: ");
+    // Serial.println(this->m_buffer->available());
+    // Serial.print("Connected: ");
+    // Serial.println(this->m_connected);
+    // Serial.print("Awaiting acknoledge: ");
+    // Serial.println(this->m_awaiting_acknoledge);
     // Serial.print("Backoff time: ");
     // Serial.println(this->m_backoff_time);
+    // Serial.print("Last backoff: ");
+    // Serial.println(this->m_last_backoff);
     // Serial.print("Free memory: ");
     // Serial.println(freeMemory());
     // Serial.print("Last health check: ");
     // Serial.println(this->m_last_health_check);
     // Serial.print("Health check delay: ");
     // Serial.println(this->m_health_check_delay);
-    // Serial.print("Last backoff: ");
-    // Serial.println(this->m_last_backoff);
     // Serial.print("Last packet id: ");
     // Serial.println(this->m_last_packet_id);
     // Serial.print("id counter: ");
@@ -124,8 +145,8 @@ void TransceiverPrimary::receive()
         this->m_radio.read(&this->m_received_packet, sizeof(this->m_received_packet));
         if (this->m_last_packet_id != this->m_received_packet.id && this->m_received_packet.num_data_fields != 0)
         {
-            this->write_data_to_serial();
             this->m_last_packet_id = this->m_received_packet.id;
+            this->write_data_to_serial();
         }
         this->m_awaiting_acknoledge = false;
         this->set_connected();
@@ -146,7 +167,7 @@ void TransceiverPrimary::write_connection_status_to_serial(bool connected)
 {
     StaticJsonDocument<200> doc;
     doc["0"] = (connected) ? 1 : 0;
-    serializeJson(doc, Serial);
+    // serializeJson(doc, Serial);
 }
 
 void TransceiverPrimary::load(Data data)
@@ -204,14 +225,7 @@ void TransceiverPrimary::load_large(Data *data, int size)
             packet_size = j;
         }
 
-        if (this->m_send_packet.num_data_fields == 0)
-        {
-            this->load(packet_data, packet_size);
-        }
-        else
-        {
-            this->add_to_buffer(this->data_to_packet(packet_data, packet_size));
-        };
+        this->load(packet_data, packet_size);
     }
 }
 
@@ -249,7 +263,6 @@ void TransceiverPrimary::add_to_buffer(Packet packet)
     buffered_packet.packet = packet;
     buffered_packet.created_time = millis();
     this->m_buffer->unshift(buffered_packet);
-    this->m_last_backoff = millis();
 }
 
 void TransceiverPrimary::clear_buffer()
@@ -277,8 +290,8 @@ void TransceiverPrimary::increase_backoff()
 {
     const int max_backoff = random(950, 1050);
     this->m_backoff_time = min(this->m_backoff_time * (1 + (random(0, 99) / 100.0)), max_backoff);
-    Serial.println("Increasing backoff to: ");
-    Serial.println(this->m_backoff_time);
+    // Serial.println("Increasing backoff to: ");
+    // Serial.println(this->m_backoff_time);
 }
 
 unsigned char TransceiverPrimary::increment_id()
