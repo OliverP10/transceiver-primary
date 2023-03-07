@@ -54,7 +54,6 @@ private:
     void monitor_connection_health();
     void receive();
     void send_data();
-    Packet data_to_packet(Data data[7], unsigned char size);
     void write_data_to_serial();
     void write_connection_status_to_serial(bool connected);
     void add_to_buffer(Packet Packet);

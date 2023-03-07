@@ -8,7 +8,7 @@ unsigned long last_run_print = millis();
 unsigned int run_delay_print = 1000;
 
 unsigned long last_run_send = millis();
-unsigned int run_delay_send = 1000;
+unsigned int run_delay_send = 50;
 
 void setup()
 {
