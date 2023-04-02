@@ -91,21 +91,22 @@ void TransceiverPrimary::syncronise_radios()
     StaticJsonDocument<200> doc;
     doc["1"] = 1;
     serializeJson(doc, Serial);
+    Serial.println();
 }
 
 void TransceiverPrimary::debug()
 {
-    Serial.println();
-    Serial.print("Packets sent: ");
-    Serial.println(packets_sent);
-    packets_sent = 0;
-    Serial.print("Packets lost: ");
-    Serial.println(packets_lost);
-    packets_lost = 0;
-    Serial.print("Buffer available: ");
-    Serial.println(this->m_buffer->available());
-    Serial.print("Connected: ");
-    Serial.println(this->m_connected);
+    // Serial.println();
+    // Serial.print("Packets sent: ");
+    // Serial.println(packets_sent);
+    // packets_sent = 0;
+    // Serial.print("Packets lost: ");
+    // Serial.println(packets_lost);
+    // packets_lost = 0;
+    // Serial.print("Buffer available: ");
+    // Serial.println(this->m_buffer->available());
+    // Serial.print("Connected: ");
+    // Serial.println(this->m_connected);
     // Serial.print("Awaiting acknoledge: ");
     // Serial.println(this->m_awaiting_acknoledge);
     // Serial.print("Backoff time: ");
@@ -128,6 +129,7 @@ void TransceiverPrimary::set_connected()
 {
     if (!this->m_connected)
     {
+        // add led
         this->m_connected = true;
         this->write_connection_status_to_serial(true);
     }
@@ -162,6 +164,7 @@ void TransceiverPrimary::write_data_to_serial()
         doc[String(this->m_received_packet.data[i].key)] = this->m_received_packet.data[i].value;
     }
     serializeJson(doc, Serial);
+    Serial.println();
 }
 
 void TransceiverPrimary::write_connection_status_to_serial(bool connected)
@@ -169,6 +172,7 @@ void TransceiverPrimary::write_connection_status_to_serial(bool connected)
     StaticJsonDocument<20> doc;
     doc["0"] = (connected) ? 1 : 0;
     serializeJson(doc, Serial);
+    Serial.println();
 }
 
 /*

@@ -12,7 +12,7 @@ unsigned int run_delay_send = 50;
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(57600);
   transceiver.setup(address);
 }
 
