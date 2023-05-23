@@ -10,6 +10,7 @@
 
 int packets_sent = 0;
 int packets_lost = 0;
+int number_backoffs = 0;
 
 TransceiverPrimary::TransceiverPrimary(int ce_pin, int csn_pin) : m_radio(ce_pin, csn_pin),
                                                                   m_connected(false),
@@ -103,6 +104,9 @@ void TransceiverPrimary::debug()
     // Serial.print("Packets lost: ");
     // Serial.println(packets_lost);
     // packets_lost = 0;
+    // Serial.print("Number of backoffs: ");
+    // Serial.println(number_backoffs);
+    // number_backoffs = 0;
     // Serial.print("Buffer available: ");
     // Serial.println(this->m_buffer->available());
     // Serial.print("Connected: ");
@@ -149,6 +153,7 @@ void TransceiverPrimary::set_disconnected()
 
 void TransceiverPrimary::tick()
 {
+    this->load_data_from_serial();
     this->receive();
     this->monitor_connection_health();
     this->send_data();
@@ -157,7 +162,7 @@ void TransceiverPrimary::tick()
 
 void TransceiverPrimary::write_data_to_serial()
 {
-    StaticJsonDocument<100> doc;
+    StaticJsonDocument<150> doc;
 
     for (int i = 0; i < this->m_received_packet.num_data_fields; i++)
     {
@@ -180,15 +185,15 @@ void TransceiverPrimary::write_connection_status_to_serial(bool connected)
 */
 void TransceiverPrimary::load(Data data)
 {
-    Data dataArray[7];
+    Data dataArray[5];
     dataArray[0] = data;
     return this->load(dataArray, 1);
 }
 
 /*
-    Loads an array of data with max size of 7, ready to be sent
+    Loads an array of data with max size of 5, ready to be sent
 */
-void TransceiverPrimary::load(Data data[7], int size)
+void TransceiverPrimary::load(Data data[5], unsigned char size)
 {
     Packet packet;
     packet.id = this->increment_id();
@@ -209,16 +214,16 @@ void TransceiverPrimary::load(Data data[7], int size)
 }
 
 /*
-    Loads an array of data with specified size. The data will be split up into max packet size of 7.
+    Loads an array of data with specified size. The data will be split up into max packet size of 5.
 */
-void TransceiverPrimary::load_large(Data *data, int size)
+void TransceiverPrimary::load_large(Data *data, unsigned char size)
 {
-    const int max_size = 7;
+    const int max_size = 5;
     int num_packets = ceil((double)size / (double)max_size);
     int index = 0;
     for (int i = 0; i < num_packets; i++)
     {
-        Data packet_data[7];
+        Data packet_data[5];
         unsigned char packet_size = 0;
         for (int j = 0; j < max_size && index < size; j++)
         {
@@ -226,6 +231,44 @@ void TransceiverPrimary::load_large(Data *data, int size)
             packet_size = j;
         }
         this->load(packet_data, packet_size + 1);
+    }
+}
+
+/*
+    Converts string from serial into json and loads it to be sent.
+    Should be around max 10 items at a time, increase StaticJsonDocument size to send more.
+*/
+void TransceiverPrimary::load_data_from_serial()
+{
+    if (Serial.available())
+    {
+        StaticJsonDocument<200> doc;
+        DeserializationError error = deserializeJson(doc, Serial);
+        if (error)
+        {
+            // Serial.println(error.f_str());
+            return;
+        }
+
+        // serializeJson(doc, Serial);
+        // Serial.println();
+
+        Data packet_data[doc.size()];
+        unsigned char index = 0;
+        for (JsonPair kvp : doc.as<JsonObject>())
+        {
+            const char *key = kvp.key().c_str();
+            float value = kvp.value().as<float>();
+
+            Data data;
+            data.key = atoi(key);
+            data.value = value;
+
+            packet_data[index] = data;
+            index++;
+        }
+
+        this->load_large(packet_data, doc.size());
     }
 }
 
@@ -244,6 +287,7 @@ void TransceiverPrimary::send_data()
     {
         this->set_connected();
         packets_sent++;
+
         this->m_send_packet.num_data_fields = 0;
         this->m_awaiting_acknoledge = true;
 
@@ -274,7 +318,6 @@ void TransceiverPrimary::clear_buffer()
     }
 
     const unsigned int max_packet_lifetime = 1000;
-
     while (!this->m_buffer->isEmpty() && this->m_buffer->last().created_time + max_packet_lifetime < millis())
     {
         this->m_buffer->pop();
@@ -289,8 +332,9 @@ void TransceiverPrimary::reset_backoff()
 
 void TransceiverPrimary::increase_backoff()
 {
-    const int max_backoff = random(950, 1050);
+    const int max_backoff = random(800, 1100);
     this->m_backoff_time = min(this->m_backoff_time * (1 + (random(0, 99) / 100.0)), max_backoff);
+    number_backoffs++;
     // Serial.println("Increasing backoff to: ");
     // Serial.println(this->m_backoff_time);
 }

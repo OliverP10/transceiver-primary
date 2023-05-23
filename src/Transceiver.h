@@ -5,20 +5,20 @@
 struct Data
 {
     unsigned int key;
-    unsigned int value;
+    float value;
 };
 
 struct Packet
 {
     unsigned char id;
     unsigned char num_data_fields;
-    Data data[7];
+    Data data[5];
 } __attribute__((packed));
 
 struct Buffered_packet
 {
     Packet packet;
-    unsigned int created_time;
+    unsigned long created_time;
 };
 
 class TransceiverPrimary
@@ -43,8 +43,8 @@ public:
     TransceiverPrimary(const TransceiverPrimary &other) = delete;
     void tick();
     void load(Data data);
-    void load(Data data[7], int size);
-    void load_large(Data *data, int size);
+    void load(Data data[5], unsigned char size);
+    void load_large(Data *data, unsigned char size);
     void setup(byte address[6]);
     void debug();
 
@@ -54,6 +54,7 @@ private:
     void monitor_connection_health();
     void receive();
     void send_data();
+    void load_data_from_serial();
     void write_data_to_serial();
     void write_connection_status_to_serial(bool connected);
     void add_to_buffer(Packet Packet);

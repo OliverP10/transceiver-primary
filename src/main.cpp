@@ -8,7 +8,7 @@ unsigned long last_run_print = millis();
 unsigned int run_delay_print = 1000;
 
 unsigned long last_run_send = millis();
-unsigned int run_delay_send = 50;
+unsigned int run_delay_send = 500;
 
 void setup()
 {
@@ -66,7 +66,7 @@ void loop()
 
     Data data10;
     data10.key = 12;
-    data10.value = random(0, 9999);
+    data10.value = 234354.4356f;
 
     Data packet_data[10];
     packet_data[0] = data1;
@@ -74,14 +74,14 @@ void loop()
     packet_data[2] = data3;
     packet_data[3] = data4;
     packet_data[4] = data5;
+
     packet_data[5] = data6;
     packet_data[6] = data7;
-
     packet_data[7] = data8;
     packet_data[8] = data9;
     packet_data[9] = data10;
 
-    transceiver.load_large(packet_data, 10);
+    // transceiver.load_large(packet_data, 10);
   }
 
   transceiver.tick();
