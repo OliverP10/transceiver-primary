@@ -42,13 +42,13 @@ public:
     ~TransceiverPrimary();
     TransceiverPrimary(const TransceiverPrimary &other) = delete;
     void tick();
-    void load(Data data);
-    void load(Data data[5], unsigned char size);
-    void load_large(Data *data, unsigned char size);
+    void load_data(Data *data, unsigned char size);
     void setup(byte address[6]);
     void debug();
 
 private:
+    void load(Data data);
+    void load(Data data[5], unsigned char size);
     void set_connected();
     void set_disconnected();
     void monitor_connection_health();

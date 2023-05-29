@@ -34,6 +34,9 @@ TransceiverPrimary::~TransceiverPrimary()
     delete this->m_buffer;
 }
 
+/*
+Sets up the radio object with specified pins and address
+*/
 void TransceiverPrimary::setup(byte address[6])
 {
     this->m_radio.begin();
@@ -47,6 +50,11 @@ void TransceiverPrimary::setup(byte address[6])
     this->m_radio.startListening();
 }
 
+/*
+Reads any data from the recive buffer
+Checks that it has a new ID compared to last packet, and writes it to serial
+Sets the radio to connected
+*/
 void TransceiverPrimary::receive()
 {
     if (this->m_radio.available())
@@ -62,6 +70,9 @@ void TransceiverPrimary::receive()
     }
 }
 
+/*
+Sets the radio disconnected and attempts radio resynce if last recived message was longer than m_health_check_delay
+*/
 void TransceiverPrimary::monitor_connection_health()
 {
     if (this->m_last_health_check + this->m_health_check_delay < millis())
@@ -71,6 +82,10 @@ void TransceiverPrimary::monitor_connection_health()
     }
 }
 
+/*
+Sends a reserved key 1 to the secondary radio to tell it to sets its m_awaiting_acknoledge attribute to the value 1
+Essietialy telling the secondary radio, whatever state your in set your self to awaiting acknoledge (listining)
+*/
 void TransceiverPrimary::syncronise_radios()
 {
     Data data;
@@ -95,6 +110,9 @@ void TransceiverPrimary::syncronise_radios()
     Serial.println();
 }
 
+/*
+Used to print out usefull debug data every second
+*/
 void TransceiverPrimary::debug()
 {
     // Serial.println();
@@ -129,6 +147,11 @@ void TransceiverPrimary::debug()
     // Serial.println(this->m_id_counter);
 }
 
+/*
+Sets the state of the radio to connected
+If m_connected state changes then it will write to serial
+Ressetting any accumlated backoff in the process
+*/
 void TransceiverPrimary::set_connected()
 {
     if (!this->m_connected)
@@ -141,6 +164,10 @@ void TransceiverPrimary::set_connected()
     this->reset_backoff();
 }
 
+/*
+Sets the state of the radio to disconnected
+If m_connected state changes then it will write to serial
+*/
 void TransceiverPrimary::set_disconnected()
 {
     if (this->m_connected)
@@ -151,6 +178,9 @@ void TransceiverPrimary::set_disconnected()
     this->m_last_health_check = millis();
 }
 
+/*
+Used in the main loop of the program to handle time dependant logic and functions that need to be called frequently
+*/
 void TransceiverPrimary::tick()
 {
     this->load_data_from_serial();
@@ -160,6 +190,9 @@ void TransceiverPrimary::tick()
     this->clear_buffer();
 }
 
+/*
+Writes data from m_received_packet to serial
+*/
 void TransceiverPrimary::write_data_to_serial()
 {
     StaticJsonDocument<150> doc;
@@ -172,6 +205,9 @@ void TransceiverPrimary::write_data_to_serial()
     Serial.println();
 }
 
+/*
+Writes the connections status to serial
+*/
 void TransceiverPrimary::write_connection_status_to_serial(bool connected)
 {
     StaticJsonDocument<20> doc;
@@ -216,7 +252,7 @@ void TransceiverPrimary::load(Data data[5], unsigned char size)
 /*
     Loads an array of data with specified size. The data will be split up into max packet size of 5.
 */
-void TransceiverPrimary::load_large(Data *data, unsigned char size)
+void TransceiverPrimary::load_data(Data *data, unsigned char size)
 {
     const int max_size = 5;
     int num_packets = ceil((double)size / (double)max_size);
@@ -268,10 +304,15 @@ void TransceiverPrimary::load_data_from_serial()
             index++;
         }
 
-        this->load_large(packet_data, doc.size());
+        this->load_data(packet_data, doc.size());
     }
 }
 
+/*
+Sends the data from the send packet if specific conditions are met
+If acknolged recived loads the next packet out of the buffer ready to be sent
+If no acknolge then increase the backoff
+*/
 void TransceiverPrimary::send_data()
 {
     if (this->m_awaiting_acknoledge || this->m_last_backoff + this->m_backoff_time > millis())
@@ -302,6 +343,9 @@ void TransceiverPrimary::send_data()
     }
 }
 
+/*
+Adds packet to buffer if there is already an item waiting to be sent
+*/
 void TransceiverPrimary::add_to_buffer(Packet packet)
 {
     Buffered_packet buffered_packet;
@@ -310,6 +354,9 @@ void TransceiverPrimary::add_to_buffer(Packet packet)
     this->m_buffer->unshift(buffered_packet);
 }
 
+/*
+Clears packets out of the buffer if they are older than max_packet_lifetime attribute
+*/
 void TransceiverPrimary::clear_buffer()
 {
     if (this->m_buffer->isEmpty())
@@ -325,11 +372,17 @@ void TransceiverPrimary::clear_buffer()
     }
 }
 
+/*
+Resets the backoff to default value of 2
+*/
 void TransceiverPrimary::reset_backoff()
 {
     this->m_backoff_time = 2;
 }
 
+/*
+Increases the backoff by a random amount exponentially but is capped by a random nunber between 800 to 1100
+*/
 void TransceiverPrimary::increase_backoff()
 {
     const int max_backoff = random(800, 1100);
@@ -339,6 +392,10 @@ void TransceiverPrimary::increase_backoff()
     // Serial.println(this->m_backoff_time);
 }
 
+/*
+Increments the packet ID
+if packet ID is greater than 254 rolls back around to 1
+*/
 unsigned char TransceiverPrimary::increment_id()
 {
     this->m_id_counter++;
