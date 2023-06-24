@@ -161,6 +161,7 @@ void TransceiverPrimary::set_connected()
         // add led
         this->m_connected = true;
         this->write_connection_status_to_serial(true);
+        this->write_connection_status_to_callback_func(true);
     }
     this->m_last_health_check = millis();
     this->reset_backoff();
@@ -176,6 +177,7 @@ void TransceiverPrimary::set_disconnected()
     {
         this->m_connected = false;
         this->write_connection_status_to_serial(false);
+        this->write_connection_status_to_callback_func(false);
     }
     this->m_last_health_check = millis();
 }
