@@ -36,7 +36,7 @@ private:
     Packet m_received_packet;
     unsigned char m_last_packet_id;
     unsigned char m_id_counter;
-    void (*m_callback_func)(Packet, int);
+    void (*m_callback_func)(Packet);
 
 public:
     TransceiverPrimary(int ce_pin, int csn_pin);
@@ -44,7 +44,7 @@ public:
     TransceiverPrimary(const TransceiverPrimary &other) = delete;
     void tick();
     void load_data(Data *data, unsigned char size);
-    void setup(byte address[6], void (*callback_func)(Packet, int));
+    void setup(byte address[6], void (*callback_func)(Packet));
     void debug();
 
 private:
