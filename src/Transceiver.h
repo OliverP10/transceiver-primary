@@ -57,8 +57,9 @@ private:
     void send_data();
     void load_data_from_serial();
     void write_data_to_serial();
-    void call_callback_func();
+    void write_data_to_callback_func();
     void write_connection_status_to_serial(bool connected);
+    void write_connection_status_to_callback_func(bool connected);
     void add_to_buffer(Packet Packet);
     void clear_buffer();
     void reset_backoff();

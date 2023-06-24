@@ -65,7 +65,7 @@ void TransceiverPrimary::receive()
         {
             this->m_last_packet_id = this->m_received_packet.id;
             this->write_data_to_serial();
-            this->call_callback_func();
+            this->write_data_to_callback_func();
         }
         this->m_awaiting_acknoledge = false;
         this->set_connected();
@@ -210,7 +210,7 @@ void TransceiverPrimary::write_data_to_serial()
 /*
 Passes recived data to callback function
 */
-void TransceiverPrimary::call_callback_func()
+void TransceiverPrimary::write_data_to_callback_func()
 {
     if (this->m_callback_func == NULL)
     {
@@ -229,6 +229,23 @@ void TransceiverPrimary::write_connection_status_to_serial(bool connected)
     doc["0"] = (connected) ? 1 : 0;
     serializeJson(doc, Serial);
     Serial.println();
+}
+
+/*
+Writes the connections status to callback function
+*/
+void TransceiverPrimary::write_connection_status_to_callback_func(bool connected)
+{
+    if (this->m_callback_func == NULL)
+    {
+        return;
+    }
+    Packet packet;
+    packet.id = 0;
+    packet.num_data_fields = 1;
+    packet.data[0].key = 0;
+    packet.data[0].value = connected;
+    this->m_callback_func(packet);
 }
 
 /*
