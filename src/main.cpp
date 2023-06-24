@@ -13,7 +13,7 @@ unsigned int run_delay_send = 500;
 void setup()
 {
   Serial.begin(57600);
-  transceiver.setup(address);
+  transceiver.setup(address, NULL);
 }
 
 void loop()
@@ -81,7 +81,7 @@ void loop()
     packet_data[8] = data9;
     packet_data[9] = data10;
 
-    // transceiver.load_large(packet_data, 10);
+    transceiver.load_data(packet_data, 10);
   }
 
   transceiver.tick();
